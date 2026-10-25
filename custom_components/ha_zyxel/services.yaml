@@ -22,3 +22,45 @@ send_sms:
       required: false
       selector:
         text:
+
+elimina_sms:
+  name: Elimina SMS
+  description: Cancella uno o piu' messaggi dalla memoria del modem
+  fields:
+    indici:
+      name: Indici
+      description: Indici dei messaggi (li espone il sensore "SMS ricevuti")
+      required: true
+      selector:
+        object:
+
+imposta_wifi:
+  name: Imposta Wi-Fi
+  description: Cambia nome rete, password o stato della radio Wi-Fi del router
+  fields:
+    nome:
+      name: Nome rete (SSID)
+      description: Nuovo nome della rete Wi-Fi
+      required: false
+      example: "CasaMia"
+      selector:
+        text:
+    password:
+      name: Password
+      description: Nuova chiave WPA2 (almeno 8 caratteri). Non viene salvata in Home Assistant.
+      required: false
+      selector:
+        text:
+          type: password
+    acceso:
+      name: Acceso
+      description: Accende o spegne la radio Wi-Fi
+      required: false
+      selector:
+        boolean:
+
+leggi_password_wifi:
+  name: Leggi password Wi-Fi
+  description: >-
+    Restituisce la chiave del Wi-Fi a chi chiama. Non la salva da nessuna parte:
+    serve al pannello per mostrarla quando premi l'occhio.

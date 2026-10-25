@@ -59,7 +59,7 @@ const stile = `
                       color:var(--text-primary-color,#fff); }
   .pastiglia.accesa.nr { background:var(--success-color,#43a047); }
   .riga { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-  input[type=text], select, textarea {
+  input[type=text], input[type=password], select, textarea {
       font:inherit; padding:9px 10px; border-radius:10px;
       border:1px solid var(--divider-color,#ccc);
       background:var(--card-background-color,#fff); color:var(--primary-text-color); }
@@ -70,6 +70,33 @@ const stile = `
   button.azione:disabled { opacity:.5; cursor:default; }
   .nota { font-size:12px; color:var(--secondary-text-color); margin-top:10px; }
   .vuoto { font-size:14px; color:var(--secondary-text-color); }
+  .dettaglio { display:flex; justify-content:space-between; gap:12px; font-size:13px;
+               color:var(--secondary-text-color); margin-bottom:4px; }
+  .dettaglio b { font-weight:500; color:var(--primary-text-color); }
+  .campo { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+  .campo input { width:100%; box-sizing:border-box; padding:13px 14px;
+                 border-radius:10px; font-size:15px; }
+  .riga-int { display:flex; align-items:center; justify-content:space-between;
+              gap:12px; margin-bottom:14px; }
+  /* Interruttore disegnato a mano: la pastiglia non si capiva che fosse
+     cliccabile, e <ha-switch> dentro uno shadow root non e' garantito. */
+  .interruttore { position:relative; flex:none; width:42px; height:22px; padding:0;
+                  border:none; border-radius:999px; cursor:pointer;
+                  background:var(--switch-unchecked-track-color,#8d8d8d);
+                  transition:background .2s; }
+  .interruttore::after { content:''; position:absolute; top:2px; left:2px;
+                         width:18px; height:18px; border-radius:50%;
+                         background:#fff; transition:left .2s;
+                         box-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .interruttore.acceso { background:var(--primary-color,#03a9f4); }
+  .interruttore.acceso::after { left:22px; }
+  .con-occhio { position:relative; }
+  .con-occhio input { padding-right:48px; }
+  .occhio { position:absolute; right:6px; top:50%; transform:translateY(-50%);
+            background:none; border:none; cursor:pointer; padding:5px;
+            line-height:0; color:var(--secondary-text-color); opacity:.7;
+            --mdc-icon-size:24px; }
+  .occhio:hover { opacity:1; }
 `;
 
 class PannelloZyxel extends HTMLElement {
@@ -157,6 +184,36 @@ class PannelloZyxel extends HTMLElement {
           <div class="nota">Le blu sono 4G, le verdi 5G. L'ultima banda accesa non si
             puo' spegnere: resteresti senza linea.</div>
         </div>
+        <div class="scheda" id="scheda-wifi" hidden>
+          <h2>Wi-Fi del router</h2>
+          <div class="riga-int">
+            <span>Radio Wi-Fi <span class="etichetta" id="wifi-stato"></span></span>
+            <button class="interruttore" id="wifi-radio" role="switch"
+                    aria-label="Accendi o spegni il Wi-Fi"></button>
+          </div>
+          <div class="dettaglio"><span>Banda</span><b id="wifi-banda">—</b></div>
+          <div class="dettaglio"><span>Canale</span><b id="wifi-canale">—</b></div>
+          <div class="dettaglio"><span>Sicurezza</span><b id="wifi-sicurezza">—</b></div>
+          <div style="border-top:1px solid var(--divider-color,#e0e0e0);
+                      margin:14px 0 12px"></div>
+          <div class="campo">
+            <span class="etichetta">Nome rete (SSID)</span>
+            <input type="text" id="wifi-nome" autocomplete="off">
+          </div>
+          <div class="campo">
+            <span class="etichetta">Password</span>
+            <div class="con-occhio">
+              <input type="password" id="wifi-password" autocomplete="new-password"
+                     placeholder="almeno 8 caratteri">
+              <button class="occhio" id="wifi-occhio" aria-label="Mostra la password">
+                <ha-icon icon="mdi:eye-outline"></ha-icon>
+              </button>
+            </div>
+          </div>
+          <button class="azione" id="wifi-salva">Salva</button>
+          <div class="nota" id="wifi-esito">Al salvataggio la rete si riavvia: i
+            dispositivi collegati si staccano e devono riconnettersi.</div>
+        </div>
       </div>`;
     this.shadowRoot.appendChild(radice);
 
@@ -169,6 +226,28 @@ class PannelloZyxel extends HTMLElement {
           option: e.target.value,
         });
     });
+    this.shadowRoot.getElementById("wifi-radio").addEventListener("click", () => {
+      const ent = this._uno("switch.", "wi_fi");
+      if (!ent) return;
+      this._hass.callService("switch", ent.state === "on" ? "turn_off" : "turn_on", {
+        entity_id: ent.entity_id,
+      });
+    });
+    this.shadowRoot.getElementById("wifi-occhio").addEventListener("click", () => {
+      const campo = this.shadowRoot.getElementById("wifi-password");
+      const nascosta = campo.type === "password";
+      campo.type = nascosta ? "text" : "password";
+      this.shadowRoot
+        .getElementById("wifi-occhio")
+        .firstElementChild.setAttribute(
+          "icon",
+          nascosta ? "mdi:eye-off-outline" : "mdi:eye-outline"
+        );
+      campo.focus();
+    });
+    this.shadowRoot
+      .getElementById("wifi-salva")
+      .addEventListener("click", () => this._salvaWifi());
     this.shadowRoot.getElementById("auto").addEventListener("click", () => {
       const ent = this._uno("switch.", "selezione_banda_automatica");
       if (!ent) return;
@@ -185,6 +264,7 @@ class PannelloZyxel extends HTMLElement {
     this._messaggi();
     this._tecnologia();
     this._bande();
+    this._wifi();
   }
 
   _intestazione() {
@@ -401,6 +481,111 @@ class PannelloZyxel extends HTMLElement {
     }
     tasto.disabled = false;
   }
-}
 
+  /* --- Wi-Fi -------------------------------------------------------------- */
+
+  _wifi() {
+    const R = this.shadowRoot;
+    const scheda = R.getElementById("scheda-wifi");
+    const ent = this._uno("switch.", "wi_fi");
+    if (!ent) {
+      scheda.hidden = true;
+      return;
+    }
+    scheda.hidden = false;
+
+    const a = ent.attributes || {};
+    const acceso = ent.state === "on";
+    const interruttore = R.getElementById("wifi-radio");
+    interruttore.classList.toggle("acceso", acceso);
+    interruttore.setAttribute("aria-checked", acceso ? "true" : "false");
+    R.getElementById("wifi-stato").textContent = acceso ? "accesa" : "spenta";
+    R.getElementById("wifi-banda").textContent = a.banda || "—";
+    R.getElementById("wifi-canale").textContent =
+      a.canale === 0 || a.canale === "0" ? "automatico" : a.canale || "—";
+    R.getElementById("wifi-sicurezza").textContent = a.sicurezza || "—";
+
+    // La chiave attuale si chiede al router una volta sola, cosi' il campo non
+    // e' mai vuoto e l'occhio ha qualcosa da mostrare. Non arriva dallo stato
+    // delle entita': la da' un servizio, su richiesta.
+    if (!this._passwordChiesta) {
+      this._passwordChiesta = true;
+      this._caricaPassword();
+    }
+
+    // Il nome lo riempie il router, ma non mentre l'utente ci sta scrivendo:
+    // ogni giro del coordinator gli cancellerebbe quello che ha digitato.
+    const nome = R.getElementById("wifi-nome");
+    if (!this._ascoltoNome) {
+      nome.addEventListener("input", () => { this._nomeToccato = true; });
+      this._ascoltoNome = true;
+    }
+    if (!this._nomeToccato && R.activeElement !== nome) {
+      nome.value = a.nome_rete || "";
+    }
+  }
+
+  async _caricaPassword() {
+    const campo = this.shadowRoot.getElementById("wifi-password");
+    try {
+      const risposta = await this._hass.callService(
+        "ha_zyxel",
+        "leggi_password_wifi",
+        {},
+        undefined,
+        false,
+        true
+      );
+      const chiave = risposta && risposta.response ? risposta.response.password : "";
+      if (chiave && !campo.value) campo.value = chiave;
+      this._passwordInVigore = chiave;
+    } catch (err) {
+      // Non e' grave: il campo resta vuoto e si comporta come prima.
+      this._passwordChiesta = false;
+    }
+  }
+
+  async _salvaWifi() {
+    const R = this.shadowRoot;
+    const nome = R.getElementById("wifi-nome").value.trim();
+    const password = R.getElementById("wifi-password").value;
+    const esito = R.getElementById("wifi-esito");
+    const bottone = R.getElementById("wifi-salva");
+    const ent = this._uno("switch.", "wi_fi");
+    const attuale = ent && ent.attributes ? ent.attributes.nome_rete || "" : "";
+
+    const dati = {};
+    if (nome && nome !== attuale) dati.nome = nome;
+    if (password && password !== this._passwordInVigore) {
+      if (password.length < 8) {
+        esito.textContent = "La password WPA2 vuole almeno 8 caratteri.";
+        return;
+      }
+      dati.password = password;
+    }
+    if (!Object.keys(dati).length) {
+      esito.textContent = "Niente da cambiare.";
+      return;
+    }
+
+    bottone.disabled = true;
+    esito.textContent = "Scrivo sul router...";
+    try {
+      await this._hass.callService("ha_zyxel", "imposta_wifi", dati);
+      // Il campo resta pieno: e' la chiave in vigore, non una bozza da buttare.
+      R.getElementById("wifi-password").type = "password";
+      R.getElementById("wifi-occhio").firstElementChild.setAttribute(
+        "icon",
+        "mdi:eye-outline"
+      );
+      this._nomeToccato = false;
+      if (dati.password) this._passwordInVigore = dati.password;
+      esito.textContent = "Fatto. Ricollega i dispositivi.";
+    } catch (err) {
+      esito.textContent = "Non riuscito: " + (err && err.message ? err.message : err);
+    } finally {
+      bottone.disabled = false;
+    }
+  }
+}
 customElements.define("zyxel-panel", PannelloZyxel);

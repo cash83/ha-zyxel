@@ -18,7 +18,12 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from custom_components.ha_zyxel.const import CONF_TRACK_ALL, DEFAULT_TRACK_ALL, DOMAIN
+from custom_components.ha_zyxel.const import (
+    CONF_TRACK_ALL,
+    DEFAULT_TRACK_ALL,
+    DOMAIN,
+    RADICI_SENZA_SENSORI,
+)
 from custom_components.ha_zyxel.entity_names import (
     KNOWN_TRANSLATION_KEYS,
     field_translation_key,
@@ -26,6 +31,7 @@ from custom_components.ha_zyxel.entity_names import (
 )
 from custom_components.ha_zyxel.helpers import lan_hosts, trackable_macs
 from custom_components.ha_zyxel.sms_inbox import ZyxelSmsRicevuti, ZyxelUltimoSms
+from custom_components.ha_zyxel.traffico import sensori_traffico
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -496,6 +502,9 @@ async def async_setup_entry(
     # like cardpage.* vs device.* CellIntfInfo are collapsed).
     sensors = []
     for key in _iter_unique_sensor_keys(coordinator.data):
+        # Radici che questo fork espone con entita' proprie: niente sensori grezzi.
+        if key.split(".", 1)[0] in RADICI_SENZA_SENSORI:
+            continue
         sensor_config = _known_sensor_config(key.split(".")[-1])
         if sensor_config:
             sensors.append(ConfiguredZyxelSensor(coordinator, entry, key, sensor_config))
@@ -508,6 +517,7 @@ async def async_setup_entry(
     if (coordinator.data or {}).get("sms"):
         sensors.append(ZyxelSmsRicevuti(coordinator, entry))
         sensors.append(ZyxelUltimoSms(coordinator, entry))
+    sensors.extend(sensori_traffico(coordinator, entry))
     async_add_entities(sensors)
 
     # Per-client diagnostic sensors (signal / link rate), discovered dynamically

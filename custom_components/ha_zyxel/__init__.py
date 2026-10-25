@@ -20,10 +20,15 @@ from custom_components.ha_zyxel.const import (
 )
 from custom_components.ha_zyxel.entity_cleanup import (
     async_cleanup_disabled_endpoint_entities,
+    async_purge_radici_escluse,
     async_purge_stale_raw_api_names,
 )
 from custom_components.ha_zyxel.services import async_setup_services, async_unload_services
 from custom_components.ha_zyxel.band_client import ZyxelBandClient
+from custom_components.ha_zyxel.wlan_client import (
+    ZyxelWlanClient,
+    async_registra_servizio as async_registra_servizio_wifi,
+)
 from custom_components.ha_zyxel.sms_delete import async_registra_servizio
 from custom_components.ha_zyxel.frontend import (
     async_registra_pannello,
@@ -65,6 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # login fails on modern firmwares while sensor polling still works.
     entry_data["sms_client"] = ZyxelSmsClient(lambda: entry_data["router"])
     entry_data["band_client"] = ZyxelBandClient(lambda: entry_data["router"])
+    entry_data["wlan_client"] = ZyxelWlanClient(lambda: entry_data["router"])
     hass.data[DOMAIN][entry.entry_id] = entry_data
 
     def _fetch():
@@ -104,12 +110,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Recreate sensors still stuck with pre-translation ``Zyxel Api.Path`` names.
     async_purge_stale_raw_api_names(hass, entry)
+    async_purge_radici_escluse(hass, entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_cleanup_disabled_endpoint_entities(hass, entry)
     async_setup_services(hass)
     await async_registra_pannello(hass)
     await async_registra_servizio(hass)
+    await async_registra_servizio_wifi(hass)
 
     return True
 

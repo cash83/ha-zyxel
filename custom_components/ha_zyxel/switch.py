@@ -1,4 +1,4 @@
-"""Interruttori per la selezione delle bande.
+"""Interruttori: selezione delle bande e radio Wi-Fi.
 
 Nel router l'auto-selezione non e' un campo: corrisponde a ``INTF_Preferred_Bands``
 vuoto. Spegnerla significa scrivere la lista esplicita delle bande scelte.
@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .band_client import band_object, split_list
 from .const import DOMAIN
+from .wlan_client import wlan_object
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,18 +39,26 @@ async def async_setup_entry(
     """Crea l'interruttore dell'auto-selezione e uno per ogni banda supportata."""
     dati = hass.data[DOMAIN][entry.entry_id]
     coordinator = dati["coordinator"]
-    oggetto = band_object(coordinator)
-    if not oggetto:
-        _LOGGER.debug("Nessun dato bande: interruttori non creati")
-        return
+    entita: list[SwitchEntity] = []
 
-    client = dati["band_client"]
-    entita: list[SwitchEntity] = [ZyxelBandAuto(coordinator, entry, client)]
-    for banda in split_list(oggetto.get(_SUPPORTATE)):
-        if banda.lower() not in _BANDE_ITALIA:
-            continue
-        entita.append(ZyxelBand(coordinator, entry, client, banda))
-    async_add_entities(entita)
+    if wlan_object(coordinator):
+        entita.append(ZyxelWifi(coordinator, entry, dati["wlan_client"]))
+    else:
+        _LOGGER.debug("Nessun dato Wi-Fi: interruttore non creato")
+
+    oggetto = band_object(coordinator)
+    if oggetto:
+        client = dati["band_client"]
+        entita.append(ZyxelBandAuto(coordinator, entry, client))
+        for banda in split_list(oggetto.get(_SUPPORTATE)):
+            if banda.lower() not in _BANDE_ITALIA:
+                continue
+            entita.append(ZyxelBand(coordinator, entry, client, banda))
+    else:
+        _LOGGER.debug("Nessun dato bande: interruttori non creati")
+
+    if entita:
+        async_add_entities(entita)
 
 
 class _Base(CoordinatorEntity, SwitchEntity):
@@ -153,3 +162,64 @@ class ZyxelBand(_Base):
             return
         bande.remove(self._banda)
         await self._scrivi(bande)
+
+
+class ZyxelWifi(CoordinatorEntity, SwitchEntity):
+    """La radio Wi-Fi del router (campo ``wlEnable``).
+
+    Nome rete, banda e tipo di sicurezza stanno negli attributi invece che in
+    sensori a parte: servono per leggerli, non per automatizzarci sopra. La
+    password non compare da nessuna parte, nemmeno come attributo: finirebbe
+    nello storico di Home Assistant. Si cambia col servizio ``imposta_wifi``.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Wi-Fi"
+    _attr_icon = "mdi:wifi"
+
+    def __init__(self, coordinator, entry: ConfigEntry, client) -> None:
+        super().__init__(coordinator)
+        self._client = client
+        self._attr_unique_id = f"{entry.entry_id}_wifi"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=f"Zyxel ({entry.data['host']})",
+            manufacturer="Zyxel",
+        )
+
+    @property
+    def _oggetto(self) -> dict:
+        return wlan_object(self.coordinator)
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._oggetto.get("wlEnable"))
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        o = self._oggetto
+        if not o:
+            return {}
+        return {
+            "nome_rete": o.get("SSID"),
+            "banda": o.get("band"),
+            "canale": o.get("channel"),
+            "sicurezza": o.get("SecurityMode"),
+            "nascosta": o.get("wlHide"),
+            "dispositivi_max": o.get("MaxAssociatedDevices"),
+        }
+
+    async def _accendi(self, acceso: bool) -> None:
+        ok, messaggio = await self.hass.async_add_executor_job(
+            self._client.write, {"wlEnable": acceso}, self._oggetto
+        )
+        if not ok:
+            _LOGGER.error("Wi-Fi non cambiato: %s", messaggio)
+            return
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._accendi(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._accendi(False)

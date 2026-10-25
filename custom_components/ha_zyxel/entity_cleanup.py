@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from .const import disabled_optional_data_roots
+from .const import RADICI_SENZA_SENSORI, disabled_optional_data_roots
 from .entity_names import (
     KNOWN_TRANSLATION_KEYS,
     field_translation_key,
@@ -122,3 +122,30 @@ def async_cleanup_disabled_endpoint_entities(
             "y" if removed == 1 else "ies",
             sorted(disabled),
         )
+
+
+def async_purge_radici_escluse(hass: HomeAssistant, entry: ConfigEntry) -> int:
+    """Toglie dal registro i sensori grezzi delle radici che il fork gestisce da se'.
+
+    Chi aveva gia' installato una versione precedente si ritrova una trentina di
+    entita' disabilitate per il Wi-Fi, fra cui una con la chiave in chiaro: qui
+    spariscono. Vengono risparmiate le entita' create dalle piattaforme vere
+    (switch, select...), che hanno un unique_id tutto loro.
+    """
+    registry = er.async_get(hass)
+    prefisso = f"{entry.entry_id}_"
+    tolte = 0
+
+    for voce in list(er.async_entries_for_config_entry(registry, entry.entry_id)):
+        uid = voce.unique_id or ""
+        if not uid.startswith(prefisso):
+            continue
+        suffisso = uid[len(prefisso) :]
+        if suffisso.split(".", 1)[0] not in RADICI_SENZA_SENSORI:
+            continue
+        registry.async_remove(voce.entity_id)
+        tolte += 1
+
+    if tolte:
+        _LOGGER.info("Tolti %d sensori grezzi delle radici escluse", tolte)
+    return tolte
