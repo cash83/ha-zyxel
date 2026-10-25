@@ -23,6 +23,12 @@ from custom_components.ha_zyxel.entity_cleanup import (
     async_purge_stale_raw_api_names,
 )
 from custom_components.ha_zyxel.services import async_setup_services, async_unload_services
+from custom_components.ha_zyxel.band_client import ZyxelBandClient
+from custom_components.ha_zyxel.sms_delete import async_registra_servizio
+from custom_components.ha_zyxel.frontend import (
+    async_registra_pannello,
+    rimuovi_pannello,
+)
 from custom_components.ha_zyxel.sms_client import ZyxelSmsClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,7 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 nr7101_logger = logging.getLogger("nr7101.nr7101")
 nr7101_logger.setLevel(logging.WARNING)
 
-PLATFORMS = ["sensor", "button", "device_tracker", "binary_sensor"]
+PLATFORMS = ["sensor", "button", "device_tracker", "binary_sensor", "select", "switch"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -58,6 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # SMS must reuse the live nr7101 session (RSA/AES). A separate plaintext
     # login fails on modern firmwares while sensor polling still works.
     entry_data["sms_client"] = ZyxelSmsClient(lambda: entry_data["router"])
+    entry_data["band_client"] = ZyxelBandClient(lambda: entry_data["router"])
     hass.data[DOMAIN][entry.entry_id] = entry_data
 
     def _fetch():
@@ -101,6 +108,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_cleanup_disabled_endpoint_entities(hass, entry)
     async_setup_services(hass)
+    await async_registra_pannello(hass)
+    await async_registra_servizio(hass)
 
     return True
 
@@ -123,5 +132,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
         async_unload_services(hass)
+        rimuovi_pannello(hass)
 
     return unload_ok

@@ -6,6 +6,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
@@ -60,6 +61,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
         if not ok:
             _LOGGER.error("Error sending SMS: %s", error)
+            raise HomeAssistantError(f"SMS non inviato: {error}")
 
     hass.services.async_register(
         DOMAIN, SERVICE_SEND_SMS, handle_send_sms, schema=SMS_SCHEMA

@@ -70,6 +70,7 @@ class ZyxelSmsClient:
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "X-Requested-With": "XMLHttpRequest",
+            "CSRFToken": str(router.sessionkey),
             "Origin": router.url,
             "Referer": f"{router.url}/",
         }
@@ -108,7 +109,9 @@ class ZyxelSmsClient:
 
         # Stale/evicted session: Zyxel often answers 401 with a misleading
         # "Invalid Username or Password" even when credentials are fine.
-        auth_failed = resp.status_code == 401 or (
+        # Il router risponde 403 quando la sessione e' stata soffiata da un
+        # altro accesso (ne ammette una sola): va trattato come il 401.
+        auth_failed = resp.status_code in (401, 403) or (
             isinstance(data, dict)
             and "invalid" in str(data.get("result", "")).lower()
         )

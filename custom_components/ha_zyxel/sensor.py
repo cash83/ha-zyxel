@@ -25,6 +25,7 @@ from custom_components.ha_zyxel.entity_names import (
     friendly_fallback_name,
 )
 from custom_components.ha_zyxel.helpers import lan_hosts, trackable_macs
+from custom_components.ha_zyxel.sms_inbox import ZyxelSmsRicevuti, ZyxelUltimoSms
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -504,6 +505,9 @@ async def async_setup_entry(
     sensors.append(ZyxelConnectedClients(coordinator, entry))
     sensors.append(ZyxelStartupTime(coordinator, entry))
     sensors.append(ZyxelMemoryUsage(coordinator, entry))
+    if (coordinator.data or {}).get("sms"):
+        sensors.append(ZyxelSmsRicevuti(coordinator, entry))
+        sensors.append(ZyxelUltimoSms(coordinator, entry))
     async_add_entities(sensors)
 
     # Per-client diagnostic sensors (signal / link rate), discovered dynamically

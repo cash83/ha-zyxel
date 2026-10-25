@@ -41,6 +41,8 @@ DEFAULT_POLL_ONE_CONNECT = False
 CORE_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("status", "device"),
     ("lanhosts", "lanhosts"),
+    ("cellwan_sms", "sms"),
+    ("cellwan_band", "band"),
 )
 
 # option key -> (OID path, coordinator data key)

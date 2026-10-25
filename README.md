@@ -10,6 +10,23 @@ Fork of [zulufoxtrot/ha-zyxel](https://github.com/zulufoxtrot/ha-zyxel) with SMS
 
 [![Open ha-zyxel on Home Assistant Community Store (HACS)](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=oscarsanchezdm&repository=ha-zyxel&category=integration)
 
+## Changes in this fork (cash83)
+
+Fork of [oscarsanchezdm/ha-zyxel](https://github.com/oscarsanchezdm/ha-zyxel), tested on a Zyxel NR7302.
+Everything below is added on top of that fork:
+
+| Area | What this fork adds |
+|------|---------------------|
+| **Band control** | `select` for the preferred access technology and `switch` entities for the bands, read from and written to the `cellwan_band` OID. Only the ten bands used in Italy are exposed. Refuses to turn off the last remaining band. |
+| **SMS inbox** | Reads `cellwan_sms`, decodes GSM 7-bit packed senders and bodies, reassembles multi-part messages, and exposes them as `sms_ricevuti` (full list in attributes) and `ultimo_sms`. Message direction comes from the `State` field. |
+| **SMS deletion** | `ha_zyxel.elimina_sms` service. Deletes every part of a multi-part message, highest index first, because the router renumbers the remaining entries. |
+| **Reboot fix** | The session key goes in a `CSRFToken` header instead of the URL, the call re-authenticates and retries once on 401/403, and a dropped connection is treated as success. |
+| **SMS send fix** | Re-authenticates on 403 as well as 401, sends the `CSRFToken` header, and the service now raises on failure instead of only logging, so callers learn about it. |
+| **Sidebar panel** | A `Zyxel` panel: line status, one conversation per correspondent with its own reply box, send and delete, and the bands as toggle pills. It drives the existing entities, so it opens no extra session on the router. |
+
+Note: the code added by this fork carries Italian comments. They would need translating before the
+changes could be offered upstream.
+
 ## Differences from upstream
 
 Compared with [zulufoxtrot/ha-zyxel](https://github.com/zulufoxtrot/ha-zyxel):
