@@ -161,6 +161,17 @@ class ZyxelBand(_Base):
         bande = self._preferite
         if self._banda in bande:
             return
+        if not bande:
+            # Lista vuota = selezione automatica accesa. Accendere una banda
+            # qui la scriverebbe da sola nelle preferite: il router uscirebbe
+            # dall'automatico bloccato su quella sola banda, senza nemmeno
+            # l'ancora LTE se la banda e' una NR.
+            _LOGGER.error(
+                "Non accendo %s: la selezione banda automatica e' attiva. "
+                "Spegnila prima, poi scegli le bande una per una",
+                self._banda,
+            )
+            return
         bande.append(self._banda)
         await self._scrivi(bande)
 
