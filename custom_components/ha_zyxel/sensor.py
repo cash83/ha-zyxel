@@ -389,6 +389,31 @@ def _coerce_native_value(value: Any) -> Any:
     return value
 
 
+# Il modem, quando una misura NON c'e', non tace: scrive il fondo scala.
+# Per RSRP/RSSI e' -140 dBm (il minimo che il 3GPP prevede), per RSRQ/SINR
+# e' -30 dB o meno, e qualche firmware usa -32768. Lasciati passare come
+# numeri, quei valori finiscono nello storico e nelle statistiche come se
+# fossero segnale vero: un grafico di 24 ore si allunga da -140 a -70 e
+# schiaccia tutto il resto in una riga. Qui diventano "sconosciuto", che e'
+# quello che sono.
+_FONDO_SCALA_DBM = -140.0
+_FONDO_SCALA_DB = -30.0
+_NON_LETTO = -32768
+
+
+def _misura_mancante(value: Any, unit: Any) -> bool:
+    """True se il valore e' il fondo scala che il modem scrive senza misura."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    if value <= _NON_LETTO:
+        return True
+    if unit == "dBm":
+        return value <= _FONDO_SCALA_DBM
+    if unit == "dB":
+        return value <= _FONDO_SCALA_DB
+    return False
+
+
 def _sensor_identity(key: str) -> str:
     """Stable identity for entity unique_id / deduplication.
 
@@ -630,7 +655,11 @@ class ConfiguredZyxelSensor(AbstractZyxelSensor):
             return None
         if self._attr_device_class == SensorDeviceClass.DURATION:
             return _parse_uptime_seconds(value)
-        return _coerce_native_value(value)
+        numero = _coerce_native_value(value)
+        if (self._attr_device_class == SensorDeviceClass.SIGNAL_STRENGTH
+                and _misura_mancante(numero, self._attr_native_unit_of_measurement)):
+            return None
+        return numero
 
 
 class GenericZyxelSensor(AbstractZyxelSensor):
