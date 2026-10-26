@@ -24,6 +24,7 @@ from custom_components.ha_zyxel.entity_cleanup import (
     async_purge_stale_raw_api_names,
 )
 from custom_components.ha_zyxel.services import async_setup_services, async_unload_services
+from custom_components.ha_zyxel.autospegnimento import ZyxelAutoOffClient
 from custom_components.ha_zyxel.band_client import ZyxelBandClient
 from custom_components.ha_zyxel.wlan_client import (
     ZyxelWlanClient,
@@ -71,6 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry_data["sms_client"] = ZyxelSmsClient(lambda: entry_data["router"])
     entry_data["band_client"] = ZyxelBandClient(lambda: entry_data["router"])
     entry_data["wlan_client"] = ZyxelWlanClient(lambda: entry_data["router"])
+    entry_data["autooff_client"] = ZyxelAutoOffClient(lambda: entry_data["router"])
     hass.data[DOMAIN][entry.entry_id] = entry_data
 
     def _fetch():

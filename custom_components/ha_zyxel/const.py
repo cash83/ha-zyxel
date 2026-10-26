@@ -44,6 +44,7 @@ CORE_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("cellwan_sms", "sms"),
     ("cellwan_band", "band"),
     ("wlan", "wlan"),
+    ("wifi_others", "wifi_others"),
 )
 
 # Radici che NON devono diventare sensori grezzi: questo fork ne fa entita'
@@ -51,7 +52,7 @@ CORE_ENDPOINTS: tuple[tuple[str, str], ...] = (
 # ``wlan`` e' anche una questione di riservatezza: uno di quei campi sarebbe la
 # chiave del Wi-Fi in chiaro. ``traffic`` sono 135 contatori (9 interfacce per
 # 15 campi) di cui ne servono due: vedi traffico.py.
-RADICI_SENZA_SENSORI: frozenset[str] = frozenset({"wlan", "traffic"})
+RADICI_SENZA_SENSORI: frozenset[str] = frozenset({"wlan", "traffic", "wifi_others"})
 
 
 # option key -> (OID path, coordinator data key)

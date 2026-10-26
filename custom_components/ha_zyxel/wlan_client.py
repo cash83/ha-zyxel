@@ -104,6 +104,15 @@ class ZyxelWlanClient:
 
         payload = [{**_in_scrittura(corrente), **modifiche}]
 
+        # Traccia di chi tocca il Wi-Fi, senza segreti: serve a distinguere un
+        # cambiamento deciso qui da uno deciso dal router.
+        _LOGGER.info(
+            "Scrittura Wi-Fi: campi=%s wlEnable=%s (prima era %s)",
+            sorted(modifiche),
+            payload[0].get("wlEnable"),
+            corrente.get("wlEnable"),
+        )
+
         with self._lucchetto:
             for tentativo in range(2):
                 router = self._get_router()

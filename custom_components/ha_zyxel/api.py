@@ -7,6 +7,7 @@ from typing import Any
 
 from nr7101 import nr7101
 
+from .autospegnimento import OID as OID_AUTOOFF, leggi as leggi_autooff
 from .const import CORE_ENDPOINTS
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,7 +70,11 @@ def _fetch_available_endpoints(
 
     for endpoint, key in endpoints:
         try:
-            data = router.get_json_object(endpoint)
+            if endpoint == OID_AUTOOFF:
+                # Questo OID non risponde senza il parametro Index nella query.
+                data = leggi_autooff(router)
+            else:
+                data = router.get_json_object(endpoint)
             if endpoint == "Traffic_Status":
                 data = _parse_traffic_object(data)
             if data:

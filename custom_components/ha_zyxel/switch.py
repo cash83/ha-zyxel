@@ -16,6 +16,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .autospegnimento import oggetto as oggetto_autooff
 from .band_client import band_object, split_list
 from .const import DOMAIN
 from .wlan_client import wlan_object
@@ -45,6 +46,11 @@ async def async_setup_entry(
         entita.append(ZyxelWifi(coordinator, entry, dati["wlan_client"]))
     else:
         _LOGGER.debug("Nessun dato Wi-Fi: interruttore non creato")
+
+    if oggetto_autooff(coordinator):
+        entita.append(
+            ZyxelAutoSpegnimento(coordinator, entry, dati["autooff_client"])
+        )
 
     oggetto = band_object(coordinator)
     if oggetto:
@@ -223,3 +229,52 @@ class ZyxelWifi(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         await self._accendi(False)
+
+
+class ZyxelAutoSpegnimento(CoordinatorEntity, SwitchEntity):
+    """Se il router debba spegnere da solo il proprio Wi-Fi.
+
+    Il Wi-Fi dell'NR7302 e' pensato per la sola amministrazione e il firmware lo
+    spegne dopo l'intervallo impostato (trenta minuti di fabbrica). Spegnere
+    questo interruttore e' il modo di tenerlo acceso.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Spegnimento automatico del Wi-Fi"
+    _attr_icon = "mdi:wifi-off"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator, entry: ConfigEntry, client) -> None:
+        super().__init__(coordinator)
+        self._client = client
+        self._attr_unique_id = f"{entry.entry_id}_autooff"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=f"Zyxel ({entry.data['host']})",
+            manufacturer="Zyxel",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        return bool(oggetto_autooff(self.coordinator).get("wlAutoOffEnable"))
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"minuti": oggetto_autooff(self.coordinator).get("wlAutoOffIntvl")}
+
+    async def _scrivi(self, acceso: bool) -> None:
+        corrente = oggetto_autooff(self.coordinator)
+        ok, messaggio = await self.hass.async_add_executor_job(
+            self._client.write, {"wlAutoOffEnable": int(acceso)}, corrente
+        )
+        if not ok:
+            _LOGGER.error("Autospegnimento non cambiato: %s", messaggio)
+            return
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._scrivi(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._scrivi(False)
+
