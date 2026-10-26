@@ -88,7 +88,15 @@ class _Base(CoordinatorEntity, SwitchEntity):
 
     @property
     def _preferite(self) -> list[str]:
-        return split_list(self._oggetto.get(_PREFERITE))
+        bande = split_list(self._oggetto.get(_PREFERITE))
+        # Con la selezione automatica accesa il router non svuota il campo:
+        # ci scrive dentro la stringa "Auto". Per noi vale come nessuna
+        # preferenza, se no l'interruttore dell'auto resta spento, le bande
+        # risultano tutte deselezionate e una riaccensione scriverebbe
+        # "Auto,B3" al router.
+        if len(bande) == 1 and bande[0].lower() == "auto":
+            return []
+        return bande
 
     async def _scrivi(self, bande: list[str]) -> None:
         ok, messaggio = await self.hass.async_add_executor_job(
