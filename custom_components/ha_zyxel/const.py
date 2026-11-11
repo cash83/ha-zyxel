@@ -51,7 +51,9 @@ CORE_ENDPOINTS: tuple[tuple[str, str], ...] = (
 # proprie, e un sensore per ogni campo sarebbe solo rumore nel registro. Per
 # ``wlan`` e' anche una questione di riservatezza: uno di quei campi sarebbe la
 # chiave del Wi-Fi in chiaro. ``traffic`` sono 135 contatori (9 interfacce per
-# 15 campi) di cui ne servono due: vedi traffico.py.
+# 15 campi) che su questo apparecchio non misurano il traffico di casa: col
+# passthrough verso il router a valle il percorso dati e' accelerato in
+# hardware e salta i contatori (provato: 10 MB scaricati, +0,006 MB contati).
 RADICI_SENZA_SENSORI: frozenset[str] = frozenset({"wlan", "traffic", "wifi_others"})
 
 

@@ -14,6 +14,12 @@ const stile = `
   .valore { font-size:24px; font-weight:500; color:var(--primary-text-color); }
   .valore .unita { font-size:13px; color:var(--secondary-text-color); font-weight:400; }
   .valore.testo { font-size:18px; padding-top:4px; }
+  /* La lista dei portanti e' lunga: piu' piccola e libera di andare a capo. */
+  .valore.aggregazione { font-size:15px; line-height:1.35; word-break:break-word; }
+  /* Riga minuta sotto al numero grosso: RSRQ e CQI accanto al SINR. */
+  .sottovalore { font-size:12px; color:var(--secondary-text-color); margin-top:2px; }
+  .sottovalore:empty { display:none; }
+  .riquadro[hidden] { display:none; }
   /* align-items:start, altrimenti la scheda delle bande si allunga per pareggiare
      quella dei messaggi e resta mezza vuota. */
   .colonne { display:grid; gap:16px; align-items:start;
@@ -147,11 +153,16 @@ class PannelloZyxel extends HTMLElement {
         <div class="riquadro"><div class="etichetta">Segnale</div>
           <div class="valore" id="rsrp">—</div></div>
         <div class="riquadro"><div class="etichetta">Qualita'</div>
-          <div class="valore" id="sinr">—</div></div>
+          <div class="valore" id="sinr">—</div>
+          <div class="sottovalore" id="qualita-extra"></div></div>
+        <div class="riquadro" id="riquadro-5g" hidden><div class="etichetta">Portante 5G</div>
+          <div class="valore testo" id="nsa">—</div></div>
         <div class="riquadro"><div class="etichetta">Banda</div>
           <div class="valore testo" id="banda">—</div></div>
         <div class="riquadro"><div class="etichetta">Rete</div>
           <div class="valore testo" id="rete">—</div></div>
+        <div class="riquadro"><div class="etichetta">Aggregazione</div>
+          <div class="valore testo aggregazione" id="ca">—</div></div>
       </div>
       <div class="colonne">
         <div class="scheda">
@@ -214,6 +225,15 @@ class PannelloZyxel extends HTMLElement {
           <div class="nota" id="wifi-esito">Al salvataggio la rete si riavvia: i
             dispositivi collegati si staccano e devono riconnettersi.</div>
         </div>
+        <div class="scheda" id="scheda-linea" hidden>
+          <h2>Linea</h2>
+          <div class="dettaglio"><span>Cella</span><b id="cella">—</b></div>
+          <div class="dettaglio"><span>Cella fisica (PCI)</span><b id="pci">—</b></div>
+          <div class="dettaglio"><span>Canale (RFCN)</span><b id="rfcn">—</b></div>
+          <div class="dettaglio"><span>Dispositivi collegati</span><b id="clienti">—</b></div>
+          <div class="dettaglio"><span>Memoria del router</span><b id="memoria">—</b></div>
+          <div class="dettaglio"><span>Acceso da</span><b id="acceso">—</b></div>
+        </div>
       </div>`;
     this.shadowRoot.appendChild(radice);
 
@@ -265,6 +285,7 @@ class PannelloZyxel extends HTMLElement {
     this._tecnologia();
     this._bande();
     this._wifi();
+    this._linea();
   }
 
   _intestazione() {
@@ -275,6 +296,31 @@ class PannelloZyxel extends HTMLElement {
       ? `${rsrp}<span class="unita"> dBm</span>`
       : "—";
     R.getElementById("sinr").innerHTML = sinr ? `${sinr}<span class="unita"> dB</span>` : "—";
+
+    // RSRQ e CQI: due numeri piccoli che dicono quanto e' pulita la portante.
+    const rsrq = this._stato("sensor.", "cellular_rsrq", null);
+    const cqi = this._stato("sensor.", "cellular_cqi", null);
+    const extra = [];
+    if (rsrq !== null) extra.push(`RSRQ ${rsrq}`);
+    if (cqi !== null) extra.push(`CQI ${cqi}`);
+    R.getElementById("qualita-extra").textContent = extra.join(" · ");
+
+    // Il segnale del portante 5G esiste solo in NSA: senza, il riquadro sparisce
+    // invece di restare li' con un trattino.
+    const nsaRsrp = this._stato("sensor.", "nsa_rsrp", null);
+    const nsaSinr = this._stato("sensor.", "nsa_sinr", null);
+    const riquadro5g = R.getElementById("riquadro-5g");
+    if (nsaRsrp === null && nsaSinr === null) {
+      riquadro5g.hidden = true;
+    } else {
+      riquadro5g.hidden = false;
+      R.getElementById("nsa").textContent = [
+        nsaRsrp === null ? null : `${nsaRsrp} dBm`,
+        nsaSinr === null ? null : `${nsaSinr} dB`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
     R.getElementById("banda").textContent = (
       this._stato("sensor.", "cellular_current_band", "—") || "—"
     )
@@ -283,6 +329,19 @@ class PannelloZyxel extends HTMLElement {
     R.getElementById("rete").textContent = this._stato(
       "sensor.", "cellular_current_access_technology", "—"
     );
+
+    // "BC3,BC1,BC28,N78,N78" -> "B3 · B1 · B28 · n78 · n78": gli stessi nomi
+    // delle pastiglie qui sotto. Due n78 vuol dire due portanti sulla stessa banda.
+    const ca = this._stato("sensor.", "ca_combination", null);
+    const riquadro = R.getElementById("ca");
+    riquadro.textContent = ca
+      ? ca
+          .split(",")
+          .map((b) => b.trim().replace(/^BC/, "B").replace(/^N/, "n"))
+          .filter(Boolean)
+          .join(" · ")
+      : "—";
+    riquadro.title = ca || "";
   }
 
   _messaggi() {
@@ -480,6 +539,50 @@ class PannelloZyxel extends HTMLElement {
       esito.textContent = "Non inviato: " + (err && err.message ? err.message : err);
     }
     tasto.disabled = false;
+  }
+
+  /* --- linea -------------------------------------------------------------- */
+
+  _linea() {
+    const R = this.shadowRoot;
+    const cella = this._stato("sensor.", "cellular_cell_id", null);
+    const pci = this._stato("sensor.", "cellular_physical_cell_id", null);
+    const rfcn = this._stato("sensor.", "cellular_rfcn", null);
+    const clienti = this._stato("sensor.", "connected_devices", null);
+    const memoria = this._stato("sensor.", "memory_usage", null);
+    const acceso = this._stato("sensor.", "startup_time", null);
+
+    const scheda = R.getElementById("scheda-linea");
+    if ([cella, pci, rfcn, clienti, memoria, acceso].every((x) => x === null)) {
+      scheda.hidden = true;
+      return;
+    }
+    scheda.hidden = false;
+
+    R.getElementById("cella").textContent = cella ?? "—";
+    R.getElementById("pci").textContent = pci ?? "—";
+    R.getElementById("rfcn").textContent = rfcn ?? "—";
+    R.getElementById("clienti").textContent = clienti ?? "—";
+    R.getElementById("memoria").textContent =
+      memoria === null ? "—" : `${Math.round(Number(memoria))} %`;
+    R.getElementById("acceso").textContent = this._daQuando(acceso);
+  }
+
+  _daQuando(iso) {
+    if (!iso) return "—";
+    const quando = new Date(iso);
+    if (isNaN(quando)) return "—";
+    const minuti = Math.max(0, Math.floor((Date.now() - quando) / 60000));
+    const giorni = Math.floor(minuti / 1440);
+    const ore = Math.floor((minuti % 1440) / 60);
+    const durata = giorni ? `${giorni} g ${ore} h` : `${ore} h ${minuti % 60} m`;
+    const data = quando.toLocaleString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${durata} (dal ${data})`;
   }
 
   /* --- Wi-Fi -------------------------------------------------------------- */
