@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -121,6 +122,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_registra_servizio(hass)
     await async_registra_servizio_wifi(hass)
 
+    return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    device_entry: DeviceEntry,
+) -> bool:
+    """Permette di cancellare dalla pagina i dispositivi dei client.
+
+    Senza questa funzione Home Assistant tiene spento il pulsante di
+    eliminazione, e un client che non e' piu' in casa resta nell'elenco per
+    sempre: la regola che lo ha creato include i MAC che hanno gia' un tracker
+    di questa integrazione, quindi si auto-giustifica.
+
+    Il router stesso non si cancella: sparirebbe e tornerebbe al primo
+    aggiornamento, lasciando le sue entita' senza dispositivo.
+    """
+    if (DOMAIN, entry.entry_id) in device_entry.identifiers:
+        return False
     return True
 
 
